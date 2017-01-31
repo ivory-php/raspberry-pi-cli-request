@@ -10,15 +10,113 @@ class CLIRequest {
 	 */
 	protected $request;
 
+		/**
+	 * The argv passed by the PHP script
+	 * @var array
+	 */
+	protected $argv;
+
+	/**
+	 * The arguments passed to the application
+	 * @var array
+	 */
+	protected $arguments = [];
+
+	/**
+	 * The options provided to the application. Options 
+	 * begin with double hyphens.
+	 * @var array
+	 */
+	protected $options = [];
+
+	/**
+	 * The flags provided to the applicaiton. Flags
+	 * being with a single hyphen.
+	 * @var array
+	 */
+	protected $flags = [];
+
+	/**
+	 * The command that was typed. 
+	 * @var string
+	 */
+	protected $command;
+
 	/**
 	 * Class Consctuctor
 	 * @param array
 	 */
 	public function __construct()
 	{
-    global $_SERVER;
+    	global $_SERVER;
 
 		$this->request = $_SERVER;
+		$this->_extractArgs();
+	}
+
+	/**
+	 * Extract the arguments into the appropriate arrays
+	 * @return void
+	 */
+	protected function _extractArgs()
+	{
+		$argv = $this->request['argv'];
+		unset($argv[0]); // This is the script name, we don't need it
+
+		//The arguments passed to the application
+		foreach( $argv as $index => $arg ) :
+			/**
+			 * First check for an option. arguments start with two hyphens. So if the string
+			 * starts with two hyphens we can extract it accordingly
+			 */
+			if( substr($arg, 0, 2) == '--' ) :
+				$this->_extractOption($arg);
+			elseif( substr($arg, 0, 1) == '-' ) :			
+			/**
+			 * Next check for flags. Flags start with only a single hyphen
+			 */
+				$this->_extractFlag($arg);
+			else:
+			/**
+			 * If there are no hyphens at all, then a command was passed. 
+			 */
+				$this->_extractCommand($arg);
+			endif;
+		endforeach;		
+	}
+
+	/**
+	 * Extracts an option and adds it to the options array
+	 * @param  string $option The option to extract
+	 */
+	protected function _extractOption(string $option)
+	{
+		// First we'll remove the two hyphens as they aren't needed
+		$option = substr($option, 2);
+
+		// Next we'll extract the name of the option and seperate it from it's value
+		$equalSign = strpos($option, "=");
+		
+		$optionName = camel_case(substr($option, 0, $equalSign));
+		$optionValue = substr($option, ($equalSign) + 1 );
+		$this->options[$optionName] = $optionValue;
+	}
+
+	protected function _extractFlag(string $flag)
+	{
+		$this->flags[] = camel_case(substr($flag, 1));
+	}
+
+	protected function _extractCommand($command)
+	{		
+		$this->command = trim($command);
+	}
+
+	public function __get($property)
+	{
+		if( property_exists($this, $property)) {
+			return $this->$property;
+		}
 	}
 
 	/**
@@ -150,6 +248,63 @@ class CLIRequest {
 	public function raw()
 	{
 		return $this->request();
+	}
+
+	/**
+	 * Check to see if a specific flag exists
+	 * @param  string $flagName The name of the flag to check for
+	 * @return bool           True/False
+	 */
+	public function flag($flagName)
+	{
+		return !! array_key_exists($flagName, $this->flags);
+	}
+
+	/**
+	 * Return an array of all the flags that are set
+	 * @return array 
+	 */
+	public function flags()
+	{
+		return $this->flags;
+	}
+
+	/**
+	 * Return whether or not a specific option exists
+	 * @param  string  $option 
+	 * @return boolean         
+	 */
+	public function hasOption(string $option)
+	{
+		return !! array_key_exists($option, $this->options);
+	}
+
+	/**
+	 * Return a requested option's value
+	 * @param  string $option 
+	 * @return string         
+	 */
+	public function option(string $option)
+	{
+		if( $this->hasOption($option) ) return $this->options[$option];
+	}
+
+	/**
+	 * Return all the commands in progress for this cycle
+	 * @return array 
+	 */
+	public function commandCalled()
+	{
+		return $this->command;
+	}
+
+	/**
+	 * Return the primary command for this run
+	 * @return string 
+	 */
+	public function primaryCommand()
+	{
+		if( !empty($this->commands ) ) return $this->commands[0];
 	}
 
 }
